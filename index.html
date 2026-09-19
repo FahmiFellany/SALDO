@@ -5,22 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Monitoring Saldo Rajabiller</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 40px; background-color: #f4f4f9; text-align: center; }
-        .box { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); display: inline-block; }
-        ul { list-style: none; padding: 0; text-align: left; }
-        li { margin: 10px 0; font-size: 18px; }
-        span { font-weight: bold; color: #2c3e50; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8f9fa; margin: 0; padding: 40px; display: flex; justify-content: center; }
+        .card { background: #ffffff; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); width: 100%; max-width: 400px; }
+        h2 { color: #333333; font-size: 20px; border-bottom: 2px solid #eaeaea; padding-bottom: 10px; margin-top: 0; }
+        ul { list-style: none; padding: 0; margin: 20px 0 0 0; }
+        li { padding: 12px 0; border-bottom: 1px dashed #eeeeee; font-size: 16px; color: #555555; display: flex; justify-content: space-between; }
+        li:last-child { border-bottom: none; }
+        span { font-weight: 600; color: #0d6efd; }
     </style>
 </head>
 <body>
-    <div class="box">
+
+    <!-- KONTEN MENU UTAMA APLIKASI BARU -->
+    <div class="card">
         <h2>Update Info Saldo PDAM</h2>
         <ul>
-            <li>Pagi: <span id="saldo-pagi">Rp 0,00</span></li>
-            <li>Siang: <span id="saldo-siang">Rp 0,00</span></li>
-            <li>Sore: <span id="saldo-sore">Rp 0,00</span></li>
-            <li>Malam: <span id="saldo-malam">Rp 0,00</span></li>
+            <li>Pagi (06:00 - 08:00 WIB): <span id="saldo-pagi">Rp 0,00</span></li>
+            <li>Siang (12:00 - 14:00 WIB): <span id="saldo-siang">Rp 0,00</span></li>
+            <li>Sore (15:00 - 17:00 WIB): <span id="saldo-sore">Rp 0,00</span></li>
+            <li>Malam (18:00 - 20:59 WIB): <span id="saldo-malam">Rp 0,00</span></li>
         </ul>
     </div>
+
 </body>
 </html>
