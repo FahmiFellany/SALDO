@@ -57,10 +57,10 @@ def scrape_and_update():
     elif 12 <= jam_sekarang <= 14:
         target_id = "saldo-siang"
         waktu_tag = "Siang"
-    elif 15 <= jam_sekarang <= 17:
+    elif 15 <= jam_sekarang < 17:
         target_id = "saldo-sore"
         waktu_tag = "Sore"
-    elif 18 <= jam_sekarang <= 20:
+    elif 17 <= jam_sekarang <= 20:
         target_id = "saldo-malam"
         waktu_tag = "Malam"
     else:
