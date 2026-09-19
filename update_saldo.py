@@ -3,7 +3,7 @@ import re
 import sys
 from datetime import datetime
 import zoneinfo
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import sync_playwright
 
 RAJABILLER_URL = "https://wr.rajabiller.com"
 
@@ -109,11 +109,8 @@ def scrape_saldo_rajabiller(username: str, password: str) -> str:
             print(f"[SUCCESS] Saldo berhasil diekstrak: {extracted_saldo}")
             return extracted_saldo
 
-        except PlaywrightTimeoutError as te:
-            print(f"[ERROR] Timeout saat scraping Rajabiller: {te}", file=sys.stderr)
-            raise
         except Exception as e:
-            print(f"[ERROR] Gagal melakukan scraping: {e}", file=sys.stderr)
+            print(f"[ERROR] Gagal/Timeout saat scraping Rajabiller: {e}", file=sys.stderr)
             raise
         finally:
             browser.close()
