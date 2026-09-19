@@ -2,11 +2,8 @@ name: Auto Sync Saldo Rajabiller
 
 on:
   schedule:
-    # Menggunakan standar waktu UTC (WIB minus 7 jam) untuk memicu eksekusi tepat waktu
-    - cron: '0 23 * * *' # Eksekusi pukul 06:00 WIB (Pagi)
-    - cron: '0 6 * * *'  # Eksekusi pukul 13:00 WIB (Siang)
-    - cron: '0 9 * * *'  # Eksekusi pukul 16:00 WIB (Sore)
-    - cron: '0 12 * * *' # Eksekusi pukul 19:00 WIB (Malam)
+    # Otomatisasi sync saldo setiap 5 menit sekali
+    - cron: '*/5 * * * *'
   workflow_dispatch: # Fitur tombol pemicu manual lewat dashboard GitHub
 
 jobs:
