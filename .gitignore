@@ -1,0 +1,9 @@
+# Environment Variables & Secrets
+.env
+
+# Python Cache & Artifacts
+__pycache__/
+*.py[cod]
+
+# Playwright / Browser Cache
+.playwright/

@@ -1,23 +1,38 @@
+"""
+Module for scraping Rajabiller balance and auto-updating index.html.
+Designed with security, efficiency, and PEP 8 standards.
+"""
+
 import os
 import re
 import sys
 from datetime import datetime
+from typing import Optional, Tuple
 import zoneinfo
+
+# Load environment variables from .env file if python-dotenv is installed
+try:
+    from dotenv import load_dotenv  # type: ignore
+    load_dotenv()
+except ImportError:
+    pass
+
 try:
     from playwright.sync_api import sync_playwright  # type: ignore
 except ImportError:
     sync_playwright = None  # type: ignore
 
 RAJABILLER_URL = "https://wr.rajabiller.com"
+INDEX_HTML_PATH = "index.html"
 
-def get_target_slot(jam_wib: int) -> tuple[str, str]:
+
+def get_target_slot(jam_wib: int) -> Tuple[str, str]:
     """
-    Menentukan ID elemen HTML berdasarkan jam WIB saat skrip dieksekusi:
-    - Pagi: 06:00 - 08:00 WIB (saldo-pagi)
-    - Siang: 12:00 - 14:00 WIB (saldo-siang)
+    Determines HTML target element ID and label based on execution hour (WIB).
+    - Pagi: 06:00 - 08:59 WIB (saldo-pagi)
+    - Siang: 12:00 - 14:59 WIB (saldo-siang)
     - Sore: 15:00 - 16:59 WIB (saldo-sore)
     - Malam: 17:00 - 20:59 WIB (saldo-malam)
-    - Fallback: Memastikan eksekusi manual via workflow_dispatch selalu memperbarui slot yang sesuai.
     """
     if 6 <= jam_wib <= 8:
         return "saldo-pagi", "Pagi (06:00 - 08:00 WIB)"
@@ -35,27 +50,31 @@ def get_target_slot(jam_wib: int) -> tuple[str, str]:
         else:
             return "saldo-sore", "Sore (Fallback Jam 17 WIB)"
 
-def scrape_saldo_rajabiller(username: str, password: str) -> str:
-    if not sync_playwright:
-        raise ImportError("Modul 'playwright' belum terinstall di lingkungan ini. Silakan jalankan 'pip install playwright'.")
 
-    print(f"[*] Membuka {RAJABILLER_URL} dengan Playwright Headless Browser...")
+def scrape_saldo_rajabiller(username: str, password: str) -> str:
+    """
+    Authenticates to Rajabiller portal using Playwright and extracts current balance.
+    Kredensial diambil aman dari Environment Variables / file .env.
+    """
+    if not sync_playwright:
+        raise ImportError("Playwright core module is not installed in the environment.")
+
+    print(f"[*] Navigating to portal: {RAJABILLER_URL}")
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
-            args=["--no-sandbox", "--disable-setuid-sandbox"]
+            args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
         )
         context = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
         )
         page = context.new_page()
         page.set_default_timeout(30000)
 
         try:
-            print(f"[*] Navigasi ke {RAJABILLER_URL}...")
             page.goto(RAJABILLER_URL, wait_until="networkidle")
 
-            # Deteksi input Username / UID
+            # Username input detection
             user_selector = None
             for sel in ['input[name="username"]', 'input[name="uid"]', '#username', '#uid', 'input[type="text"]']:
                 if page.is_visible(sel):
@@ -66,10 +85,9 @@ def scrape_saldo_rajabiller(username: str, password: str) -> str:
                 page.wait_for_selector('input[type="text"]', timeout=10000)
                 user_selector = 'input[type="text"]'
 
-            print(f"[*] Memasukkan Username/UID ke selector '{user_selector}'...")
             page.fill(user_selector, username)
 
-            # Deteksi input Password / PIN
+            # Password input detection
             pass_selector = None
             for sel in ['input[name="password"]', 'input[name="pin"]', '#password', '#pin', 'input[type="password"]']:
                 if page.is_visible(sel):
@@ -80,109 +98,107 @@ def scrape_saldo_rajabiller(username: str, password: str) -> str:
                 page.wait_for_selector('input[type="password"]', timeout=10000)
                 pass_selector = 'input[type="password"]'
 
-            print(f"[*] Memasukkan Password/PIN ke selector '{pass_selector}'...")
             page.fill(pass_selector, password)
 
-            # Deteksi tombol submit
+            # Submit button
             submit_selector = 'button[type="submit"], input[type="submit"], button:has-text("Login"), button:has-text("Masuk")'
-            print("[*] Menekan tombol Login...")
             page.click(submit_selector)
 
-            # Tunggu loading dashboard / navigasi
             page.wait_for_load_state("networkidle")
             page.wait_for_timeout(3000)
 
-            print("[*] Mencari elemen saldo (class 'font-semibold')...")
-            # Ambil semua elemen dengan class 'font-semibold'
+            # Extract balance
             elements = page.query_selector_all(".font-semibold, span:has-text('Rp'), div:has-text('Rp')")
             
-            extracted_saldo = None
+            extracted_saldo: Optional[str] = None
             for el in elements:
                 text = el.text_content().strip()
                 text_clean = text.replace('\xa0', ' ').replace('&nbsp;', ' ').strip()
-                
-                # Gunakan regex match untuk menangkap format Rp X.XXX.XXX atau Rp X.XXX.XXX,XX
                 match = re.search(r'Rp\s*[\d\.,]+', text_clean)
                 if match:
                     extracted_saldo = match.group(0)
-                    print(f"    -> Ditemukan saldo terformat: '{extracted_saldo}'")
                     break
 
             if not extracted_saldo:
-                raise ValueError("Elemen saldo dengan class 'font-semibold' berformat 'Rp ...' tidak ditemukan pada dashboard.")
+                raise ValueError("Saldo element matching pattern 'Rp ...' was not found on dashboard.")
 
-            print(f"[SUCCESS] Saldo berhasil diekstrak: {extracted_saldo}")
+            print(f"[SUCCESS] Balance successfully scraped.")
             return extracted_saldo
 
         except Exception as e:
-            print(f"[ERROR] Gagal/Timeout saat scraping Rajabiller: {e}", file=sys.stderr)
+            # Mask internal details to prevent sensitive stack trace leaks in workflow logs
+            print(f"[ERROR] Scraper encountered an operational error: {type(e).__name__}", file=sys.stderr)
             raise
         finally:
             browser.close()
 
-def update_html(target_id: str, text_saldo: str, now_wib: datetime):
-    file_path = "index.html"
-    if not os.path.exists(file_path):
-        print(f"[ERROR] Berkas {file_path} tidak ditemukan.", file=sys.stderr)
+
+def update_html(target_id: str, text_saldo: str, now_wib: datetime) -> bool:
+    """
+    Updates target element values inside index.html safely in a single pass.
+    """
+    if not os.path.exists(INDEX_HTML_PATH):
+        print(f"[ERROR] Target file '{INDEX_HTML_PATH}' does not exist.", file=sys.stderr)
         return False
 
-    with open(file_path, "r", encoding="utf-8") as f:
-        html_content = f.read()
+    try:
+        with open(INDEX_HTML_PATH, "r", encoding="utf-8") as f:
+            html_content = f.read()
 
-    formatted_time = now_wib.strftime("%d %b %Y, %H:%M WIB")
+        formatted_time = now_wib.strftime("%d %b %Y, %H:%M WIB")
 
-    # 1. Update slot spesifik (saldo-pagi, saldo-siang, saldo-sore, saldo-malam)
-    pattern_slot = rf'(<span\s+id="{target_id}"[^>]*>)[^<]*(</span>)'
-    if re.search(pattern_slot, html_content):
-        html_content = re.sub(pattern_slot, rf'\g<1>{text_saldo}\2', html_content)
+        # Map targets for unified regex replacement pass
+        targets = {
+            target_id: text_saldo,
+            "saldo-terbaru": text_saldo,
+            "waktu-update": formatted_time
+        }
 
-    # 2. Update saldo-terbaru (Hero Banner Utama)
-    pattern_terbaru = rf'(<span\s+id="saldo-terbaru"[^>]*>)[^<]*(</span>)'
-    if re.search(pattern_terbaru, html_content):
-        html_content = re.sub(pattern_terbaru, rf'\g<1>{text_saldo}\2', html_content)
+        for element_id, new_value in targets.items():
+            pattern = rf'(<span\s+id="{re.escape(element_id)}"[^>]*>)[^<]*(</span>)'
+            html_content = re.sub(pattern, rf'\g<1>{new_value}\2', html_content)
 
-    # 3. Update waktu-update (Timestamp Scrape)
-    pattern_waktu = rf'(<span\s+id="waktu-update"[^>]*>)[^<]*(</span>)'
-    if re.search(pattern_waktu, html_content):
-        html_content = re.sub(pattern_waktu, rf'\g<1>{formatted_time}\2', html_content)
+        with open(INDEX_HTML_PATH, "w", encoding="utf-8") as f:
+            f.write(html_content)
 
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write(html_content)
+        print(f"[SUCCESS] Updated index.html successfully for #{target_id} and metadata.")
+        return True
+    except Exception as e:
+        print(f"[ERROR] Failed to update HTML: {e}", file=sys.stderr)
+        return False
 
-    print(f"[SUCCESS] Berkas index.html berhasil diperbarui untuk #{target_id}, #saldo-terbaru ('{text_saldo}'), dan #waktu-update ('{formatted_time}').")
-    return True
 
-def scrape_and_update():
+def scrape_and_update() -> None:
     print("==================================================")
     print("      SALDO SCRAPER & AUTOMATED UPDATER          ")
     print("==================================================")
 
+    # Kredensial diambil aman dari environment variables (.env / Secrets)
     username = os.getenv("RAJABILLER_USER")
     password = os.getenv("RAJABILLER_PASSWORD")
 
-    wib = zoneinfo.ZoneInfo("Asia/Jakarta")
-    now_wib = datetime.now(wib)
-    jam_sekarang = now_wib.hour
-    target_id, slot_name = get_target_slot(jam_sekarang)
+    tz_wib = zoneinfo.ZoneInfo("Asia/Jakarta")
+    now_wib = datetime.now(tz_wib)
+    target_id, slot_name = get_target_slot(now_wib.hour)
 
-    print(f"[*] Waktu Eksekusi (WIB): {now_wib.strftime('%Y-%m-%d %H:%M:%S WIB')}")
-    print(f"[*] Target Sub-Menu Slot: {slot_name} -> ID: #{target_id}")
+    print(f"[*] Execution Timestamp: {now_wib.strftime('%Y-%m-%d %H:%M:%S WIB')}")
+    print(f"[*] Active Slot: {slot_name} -> Element ID: #{target_id}")
 
     if not username or not password:
-        print("\n[WARNING] Kredensial RAJABILLER_USER / RAJABILLER_PASSWORD tidak ditemukan di Environment Variables!")
-        print("[!] Mode Simulasi Dry-Run untuk pengujian struktur HTML lokal...")
+        print("\n[INFO] Missing RAJABILLER_USER / RAJABILLER_PASSWORD environment variables.")
+        print("[!] Executing local dry-run simulation mode...")
         mock_saldo = "Rp 277.652.777,00"
-        print(f"[*] Memperbarui index.html dengan nilai simulasi: {mock_saldo}")
         update_html(target_id, mock_saldo, now_wib)
         return
 
     try:
         saldo_text = scrape_saldo_rajabiller(username, password)
         update_html(target_id, saldo_text, now_wib)
-        print("\n[SUCCESS] Seluruh proses scraping dan pembaruan saldo selesai.")
+        print("\n[SUCCESS] Automation process executed successfully.")
     except Exception as err:
-        print(f"\n[FATAL ERROR] Gagal memperbarui saldo: {err}", file=sys.stderr)
+        print(f"\n[FATAL] Execution aborted due to error: {err}", file=sys.stderr)
         sys.exit(1)
+
 
 if __name__ == "__main__":
     scrape_and_update()

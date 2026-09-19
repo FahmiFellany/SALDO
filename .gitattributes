@@ -1,0 +1,9 @@
+# Set default behavior for all files to auto normalize line endings
+* text=auto
+
+# Specify text files explicitly to convert line endings automatically
+*.html text
+*.css text
+*.py text
+*.yml text
+*.md text

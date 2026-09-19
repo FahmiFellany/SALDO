@@ -3,197 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Auto-refresh halaman setiap 5 menit (300 detik) -->
+    <!-- Refresh otomatis halaman setiap 5 menit (300 detik) -->
     <meta http-equiv="refresh" content="300">
-    <!-- Anti-cache meta tags -->
+    <!-- Header Anti-Cache untuk mencegah penahanan data lama oleh browser/CDN -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     
     <title>Monitoring Saldo Rajabiller Real-Time</title>
-    <style>
-        :root {
-            --primary: #0d6efd;
-            --primary-hover: #0b5ed7;
-            --bg-body: #f4f6f9;
-            --card-bg: #ffffff;
-            --text-main: #212529;
-            --text-muted: #6c757d;
-            --border-color: #e9ecef;
-        }
-
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-
-        body { 
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; 
-            background-color: var(--bg-body); 
-            color: var(--text-main);
-            padding: 30px 15px; 
-            display: flex; 
-            justify-content: center; 
-            align-items: center;
-            min-height: 100vh;
-        }
-
-        .card { 
-            background: var(--card-bg); 
-            padding: 28px; 
-            border-radius: 16px; 
-            box-shadow: 0 10px 30px rgba(0,0,0,0.06); 
-            width: 100%; 
-            max-width: 450px; 
-        }
-
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-
-        h2 { 
-            font-size: 18px; 
-            font-weight: 700;
-            color: var(--text-main);
-        }
-
-        .badge-live {
-            font-size: 11px;
-            background: #e8f5e9;
-            color: #2e7d32;
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-weight: 600;
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-        }
-
-        .badge-pulse {
-            width: 7px;
-            height: 7px;
-            background-color: #2e7d32;
-            border-radius: 50%;
-            display: inline-block;
-            box-shadow: 0 0 0 0 rgba(46, 125, 50, 0.7);
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(46, 125, 50, 0.7); }
-            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(46, 125, 50, 0); }
-            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(46, 125, 50, 0); }
-        }
-
-        /* Hero Banner Saldo Terkini */
-        .hero-saldo {
-            background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
-            color: #ffffff;
-            padding: 20px;
-            border-radius: 12px;
-            text-align: center;
-            margin-bottom: 22px;
-            box-shadow: 0 6px 16px rgba(13, 110, 253, 0.25);
-        }
-
-        .hero-title {
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            opacity: 0.9;
-            margin-bottom: 6px;
-        }
-
-        .hero-amount {
-            font-size: 26px;
-            font-weight: 800;
-            font-family: monospace, sans-serif;
-            margin-bottom: 6px;
-        }
-
-        .hero-sync {
-            font-size: 11px;
-            opacity: 0.85;
-        }
-
-        .section-title {
-            font-size: 13px;
-            font-weight: 700;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 10px;
-        }
-
-        ul { 
-            list-style: none; 
-            margin-bottom: 20px;
-        }
-
-        li { 
-            padding: 12px 14px; 
-            background: #f8f9fa;
-            border-radius: 8px;
-            margin-bottom: 8px;
-            font-size: 14px; 
-            color: #495057; 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center;
-        }
-
-        span.saldo-val { 
-            font-weight: 700; 
-            color: var(--primary); 
-            font-family: monospace, sans-serif;
-            font-size: 15px;
-        }
-
-        .actions {
-            display: flex;
-            gap: 10px;
-            margin-top: 15px;
-        }
-
-        .btn {
-            flex: 1;
-            padding: 10px;
-            border-radius: 8px;
-            border: none;
-            font-size: 12px;
-            font-weight: 600;
-            cursor: pointer;
-            text-decoration: none;
-            text-align: center;
-            transition: all 0.2s ease;
-        }
-
-        .btn-primary {
-            background-color: var(--primary);
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background-color: var(--primary-hover);
-        }
-
-        .btn-outline {
-            background-color: transparent;
-            border: 1px solid var(--border-color);
-            color: var(--text-main);
-        }
-
-        .btn-outline:hover {
-            background-color: #f1f3f5;
-        }
-
-        .footer-note {
-            margin-top: 18px;
-            font-size: 11px;
-            color: var(--text-muted);
-            text-align: center;
-        }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
@@ -233,8 +51,8 @@
 
         <!-- TOMBOL AKSI REAL-TIME -->
         <div class="actions">
-            <button class="btn btn-primary" onclick="refreshSaldoNow()">🔄 Refresh Tampilan</button>
-            <a href="https://github.com/FahmiFellany/SALDO/actions" target="_blank" class="btn btn-outline">⚡ Trigger Scraping</a>
+            <button id="btn-refresh" class="btn btn-primary">🔄 Refresh Tampilan</button>
+            <a href="https://github.com/FahmiFellany/SALDO/actions" target="_blank" rel="noopener noreferrer" class="btn btn-outline">⚡ Trigger Scraping</a>
         </div>
 
         <div class="footer-note">
@@ -242,39 +60,53 @@
         </div>
     </div>
 
-    <!-- SCRIPT REAL-TIME AUTO FETCH SINKRONISASI CACHE-BUSTED -->
+    <!-- SCRIPT REAL-TIME AUTO FETCH SINKRONISASI AMAN -->
     <script>
-        async function fetchLatestData() {
-            try {
-                // Parameter Date.now() mencegah penahanan cache dari browser
-                const response = await fetch('https://raw.githubusercontent.com/FahmiFellany/SALDO/main/index.html?t=' + Date.now(), {
-                    cache: 'no-store'
-                });
-                if (response.ok) {
+        document.addEventListener('DOMContentLoaded', () => {
+            const refreshBtn = document.getElementById('btn-refresh');
+
+            async function fetchLatestData() {
+                try {
+                    // Parameter Cache Busting Date.now()
+                    const response = await fetch(`https://raw.githubusercontent.com/FahmiFellany/SALDO/main/index.html?t=${Date.now()}`, {
+                        cache: 'no-store'
+                    });
+                    
+                    if (!response.ok) return;
+
                     const text = await response.text();
                     const parser = new DOMParser();
                     const doc = parser.parseFromString(text, 'text/html');
 
-                    ['saldo-terbaru', 'waktu-update', 'saldo-pagi', 'saldo-siang', 'saldo-sore', 'saldo-malam'].forEach(id => {
+                    const elementIds = ['saldo-terbaru', 'waktu-update', 'saldo-pagi', 'saldo-siang', 'saldo-sore', 'saldo-malam'];
+                    
+                    elementIds.forEach(id => {
                         const newElem = doc.getElementById(id);
                         const currentElem = document.getElementById(id);
-                        if (newElem && currentElem && newElem.innerText.trim() !== "") {
-                            currentElem.innerText = newElem.innerText;
+                        
+                        if (newElem && currentElem && newElem.textContent.trim() !== "") {
+                            // Menggunakan textContent untuk mencegah potensi Cross-Site Scripting (XSS)
+                            currentElem.textContent = newElem.textContent;
                         }
                     });
+                } catch (err) {
+                    console.error("Gagal melakukan sinkronisasi data saldo:", err);
                 }
-            } catch (err) {
-                console.log("Sync error:", err);
             }
-        }
 
-        function refreshSaldoNow() {
+            if (refreshBtn) {
+                refreshBtn.addEventListener('click', async () => {
+                    refreshBtn.disabled = true;
+                    refreshBtn.textContent = '⌛ Memuat...';
+                    await fetchLatestData();
+                    refreshBtn.textContent = '🔄 Refresh Tampilan';
+                    refreshBtn.disabled = false;
+                });
+            }
+
+            // Inisialisasi pemanggilan saat halaman siap
             fetchLatestData();
-            alert("Tampilan saldo berhasil di-refresh dari data terbaru server Rajabiller!");
-        }
-
-        // Jalankan saat halaman dimuat
-        window.addEventListener('DOMContentLoaded', fetchLatestData);
+        });
     </script>
 
 </body>
