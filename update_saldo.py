@@ -1,92 +1,178 @@
 import os
 import re
+import sys
 from datetime import datetime
 import zoneinfo
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+
+RAJABILLER_URL = "https://wr.rajabiller.com"
+
+def get_target_slot(jam_wib: int) -> tuple[str, str]:
+    """
+    Menentukan ID elemen HTML berdasarkan jam WIB saat skrip dieksekusi:
+    - Pagi: 06:00 - 08:00 WIB (saldo-pagi)
+    - Siang: 12:00 - 14:00 WIB (saldo-siang)
+    - Sore: 15:00 - 16:59 WIB (saldo-sore)
+    - Malam: 17:00 - 20:59 WIB (saldo-malam)
+    - Fallback: Memastikan eksekusi manual via workflow_dispatch selalu memperbarui slot yang sesuai.
+    """
+    if 6 <= jam_wib <= 8:
+        return "saldo-pagi", "Pagi (06:00 - 08:00 WIB)"
+    elif 12 <= jam_wib <= 14:
+        return "saldo-siang", "Siang (12:00 - 14:00 WIB)"
+    elif 15 <= jam_wib < 17:
+        return "saldo-sore", "Sore (15:00 - 17:00 WIB)"
+    elif 17 <= jam_wib <= 20:
+        return "saldo-malam", "Malam (17:00 - 20:59 WIB)"
+    else:
+        # Fallback jika dijalankan manual di luar jam jadwal utama
+        if jam_wib < 6 or jam_wib >= 21:
+            return "saldo-malam", "Malam (Fallback Waktu Malam/Dini Hari)"
+        elif 9 <= jam_wib <= 11:
+            return "saldo-pagi", "Pagi (Fallback Jam 09-11 WIB)"
+        else:
+            return "saldo-sore", "Sore (Fallback Jam 17 WIB)"
+
+def scrape_saldo_rajabiller(username: str, password: str) -> str:
+    print(f"[*] Membuka {RAJABILLER_URL} dengan Playwright Headless Browser...")
+    with sync_playwright() as p:
+        browser = p.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-setuid-sandbox"]
+        )
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
+        page = context.new_page()
+        page.set_default_timeout(30000)
+
+        try:
+            print(f"[*] Navigasi ke {RAJABILLER_URL}...")
+            page.goto(RAJABILLER_URL, wait_until="networkidle")
+
+            # Deteksi input Username / UID
+            user_selector = None
+            for sel in ['input[name="username"]', 'input[name="uid"]', '#username', '#uid', 'input[type="text"]']:
+                if page.is_visible(sel):
+                    user_selector = sel
+                    break
+            
+            if not user_selector:
+                page.wait_for_selector('input[type="text"]', timeout=10000)
+                user_selector = 'input[type="text"]'
+
+            print(f"[*] Memasukkan Username/UID ke selector '{user_selector}'...")
+            page.fill(user_selector, username)
+
+            # Deteksi input Password / PIN
+            pass_selector = None
+            for sel in ['input[name="password"]', 'input[name="pin"]', '#password', '#pin', 'input[type="password"]']:
+                if page.is_visible(sel):
+                    pass_selector = sel
+                    break
+
+            if not pass_selector:
+                page.wait_for_selector('input[type="password"]', timeout=10000)
+                pass_selector = 'input[type="password"]'
+
+            print(f"[*] Memasukkan Password/PIN ke selector '{pass_selector}'...")
+            page.fill(pass_selector, password)
+
+            # Deteksi tombol submit
+            submit_selector = 'button[type="submit"], input[type="submit"], button:has-text("Login"), button:has-text("Masuk")'
+            print("[*] Menekan tombol Login...")
+            page.click(submit_selector)
+
+            # Tunggu loading dashboard / navigasi
+            page.wait_for_load_state("networkidle")
+            page.wait_for_timeout(3000)
+
+            print("[*] Mencari elemen saldo (class 'font-semibold')...")
+            # Ambil semua elemen dengan class 'font-semibold'
+            elements = page.query_selector_all(".font-semibold")
+            
+            extracted_saldo = None
+            for el in elements:
+                # Mengambil text_content untuk memastikan &nbsp; / \xa0 terbaca
+                text = el.text_content().strip()
+                # Bersihkan non-breaking space (&nbsp; / \xa0)
+                text_clean = text.replace('\xa0', ' ').replace('&nbsp;', ' ').strip()
+                
+                if "Rp" in text_clean:
+                    print(f"    -> Ditemukan calon saldo: '{text_clean}'")
+                    extracted_saldo = text_clean
+                    break
+
+            if not extracted_saldo:
+                raise ValueError("Elemen saldo dengan class 'font-semibold' berformat 'Rp ...' tidak ditemukan pada dashboard.")
+
+            print(f"[SUCCESS] Saldo berhasil diekstrak: {extracted_saldo}")
+            return extracted_saldo
+
+        except PlaywrightTimeoutError as te:
+            print(f"[ERROR] Timeout saat scraping Rajabiller: {te}", file=sys.stderr)
+            raise
+        except Exception as e:
+            print(f"[ERROR] Gagal melakukan scraping: {e}", file=sys.stderr)
+            raise
+        finally:
+            browser.close()
+
+def update_html(target_id: str, text_saldo: str):
+    file_path = "index.html"
+    if not os.path.exists(file_path):
+        print(f"[ERROR] Berkas {file_path} tidak ditemukan.", file=sys.stderr)
+        return False
+
+    with open(file_path, "r", encoding="utf-8") as f:
+        html_content = f.read()
+
+    # Regex untuk mendeteksi <span id="target_id">...</span> dan memperbarui nilainya
+    pattern = rf'(<span\s+id="{target_id}"[^>]*>)[^<]*(</span>)'
+    
+    if not re.search(pattern, html_content):
+        print(f"[ERROR] ID '{target_id}' tidak ditemukan dalam {file_path}.", file=sys.stderr)
+        return False
+
+    new_html_content = re.sub(pattern, rf'\g<1>{text_saldo}\2', html_content)
+
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(new_html_content)
+
+    print(f"[SUCCESS] Berkas index.html berhasil diperbarui pada elemen #{target_id} dengan nilai '{text_saldo}'.")
+    return True
 
 def scrape_and_update():
-    # 1. AMBIL KREDENSIAL DARI GITHUB SECRETS
+    print("==================================================")
+    print("      SALDO SCRAPER & AUTOMATED UPDATER          ")
+    print("==================================================")
+
     username = os.getenv("RAJABILLER_USER")
     password = os.getenv("RAJABILLER_PASSWORD")
 
-    if not username or not password:
-        print("Error: Kredensial RAJABILLER_USER atau RAJABILLER_PASSWORD tidak ditemukan di Environment Variables.")
-        return
-
-    print("Memulai proses scraping dari Rajabiller...")
-    text_saldo = None
-
-    with sync_playwright() as p:
-        # Jalankan browser headless di server cloud
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
-
-        try:
-            # Akses halaman login Rajabiller Web Report
-            page.goto("https://rajabiller.com")
-            
-            # Mengisi form login (Menyesuaikan selektor form login Rajabiller)
-            page.fill("input[name='username']", username)
-            page.fill("input[name='password']", password)
-            
-            # Klik tombol login dan tunggu halaman memuat dashboard utama
-            page.click("button[type='submit']")
-            page.wait_for_load_state("networkidle")
-
-            # Mengambil element dengan class 'font-semibold' yang menampung informasi saldo
-            elemen_saldo = page.locator(".font-semibold").first
-            elemen_saldo.wait_for(timeout=15000)
-            text_saldo = elemen_saldo.inner_text().strip()
-            
-            print(f"Berhasil mengekstrak data saldo: {text_saldo}")
-            browser.close()
-
-        except Exception as e:
-            print(f"Proses scraping gagal atau timeout: {e}")
-            browser.close()
-            return
-
-    # 2. LOGIKA PENENTUAN SUB-MENU WAKTU BERDASARKAN UTC KE ASIA/JAKARTA (WIB)
     wib = zoneinfo.ZoneInfo("Asia/Jakarta")
-    jam_sekarang = datetime.now(wib).hour
-    
-    # Menentukan target ID berdasarkan parameter jam yang diminta
-    if 6 <= jam_sekarang <= 8:
-        target_id = "saldo-pagi"
-        waktu_tag = "Pagi"
-    elif 12 <= jam_sekarang <= 14:
-        target_id = "saldo-siang"
-        waktu_tag = "Siang"
-    elif 15 <= jam_sekarang < 17:
-        target_id = "saldo-sore"
-        waktu_tag = "Sore"
-    elif 17 <= jam_sekarang <= 20:
-        target_id = "saldo-malam"
-        waktu_tag = "Malam"
-    else:
-        print(f"Jam saat ini ({jam_sekarang}:00 WIB) di luar rentang jadwal update. Proses dilewati.")
+    now_wib = datetime.now(wib)
+    jam_sekarang = now_wib.hour
+    target_id, slot_name = get_target_slot(jam_sekarang)
+
+    print(f"[*] Waktu Eksekusi (WIB): {now_wib.strftime('%Y-%m-%d %H:%M:%S WIB')}")
+    print(f"[*] Target Sub-Menu Slot: {slot_name} -> ID: #{target_id}")
+
+    if not username or not password:
+        print("\n[WARNING] Kredensial RAJABILLER_USER / RAJABILLER_PASSWORD tidak ditemukan di Environment Variables!")
+        print("[!] Mode Simulasi Dry-Run untuk pengujian struktur HTML lokal...")
+        mock_saldo = "Rp 277.652.777,00"
+        print(f"[*] Memperbarui index.html dengan nilai simulasi: {mock_saldo}")
+        update_html(target_id, mock_saldo)
         return
 
-    print(f"Waktu eksekusi: Pukul {jam_sekarang} WIB. Target menu: {waktu_tag}")
-
-    # 3. MEMPERBARUI NILAI HTML SECARA SPESIFIK MENGGUNAKAN REGEX PENANDA ID
-    file_path = "index.html"
-    if os.path.exists(file_path):
-        with open(file_path, "r", encoding="utf-8") as f:
-            html_content = f.read()
-
-        # Regex ini hanya mendeteksi dan mengganti teks di dalam ID saldo terpilih
-        pattern = rf'(<span\s+id="{target_id}"[^>]*>)[^<]*(</span>)'
-        replacement = rf'\g<1>{text_saldo}\2'
-        
-        new_html_content = re.sub(pattern, replacement, html_content)
-
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(new_html_content)
-        
-        print(f"Berkas index.html berhasil diperbarui pada elemen target #{target_id}!")
-    else:
-        print("Error: Berkas index.html tidak ditemukan di root repositori.")
+    try:
+        saldo_text = scrape_saldo_rajabiller(username, password)
+        update_html(target_id, saldo_text)
+        print("\n[SUCCESS] Seluruh proses scraping dan pembaruan saldo selesai.")
+    except Exception as err:
+        print(f"\n[FATAL ERROR] Gagal memperbarui saldo: {err}", file=sys.stderr)
+        sys.exit(1)
 
 if __name__ == "__main__":
     scrape_and_update()

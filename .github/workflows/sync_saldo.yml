@@ -38,7 +38,7 @@ jobs:
     - name: Verify and Commit Changes
       run: |
         git config --global user.name "github-actions[bot]"
-        git config --global user.email "41898282+github-actions[bot]@://github.com"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
         git add index.html
         
         # Melakukan commit hanya jika ada perubahan angka saldo di file index.html
