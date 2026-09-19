@@ -28,7 +28,6 @@ def get_target_slot(jam_wib: int) -> tuple[str, str]:
     elif 17 <= jam_wib <= 20:
         return "saldo-malam", "Malam (17:00 - 20:59 WIB)"
     else:
-        # Fallback jika dijalankan manual di luar jam jadwal utama
         if jam_wib < 6 or jam_wib >= 21:
             return "saldo-malam", "Malam (Fallback Waktu Malam/Dini Hari)"
         elif 9 <= jam_wib <= 11:
@@ -99,7 +98,6 @@ def scrape_saldo_rajabiller(username: str, password: str) -> str:
             
             extracted_saldo = None
             for el in elements:
-                # Mengambil text_content untuk memastikan &nbsp; / \xa0 terbaca
                 text = el.text_content().strip()
                 # Bersihkan non-breaking space (&nbsp; / \xa0)
                 text_clean = text.replace('\xa0', ' ').replace('&nbsp;', ' ').strip()
@@ -121,7 +119,7 @@ def scrape_saldo_rajabiller(username: str, password: str) -> str:
         finally:
             browser.close()
 
-def update_html(target_id: str, text_saldo: str):
+def update_html(target_id: str, text_saldo: str, now_wib: datetime):
     file_path = "index.html"
     if not os.path.exists(file_path):
         print(f"[ERROR] Berkas {file_path} tidak ditemukan.", file=sys.stderr)
@@ -130,19 +128,27 @@ def update_html(target_id: str, text_saldo: str):
     with open(file_path, "r", encoding="utf-8") as f:
         html_content = f.read()
 
-    # Regex untuk mendeteksi <span id="target_id">...</span> dan memperbarui nilainya
-    pattern = rf'(<span\s+id="{target_id}"[^>]*>)[^<]*(</span>)'
-    
-    if not re.search(pattern, html_content):
-        print(f"[ERROR] ID '{target_id}' tidak ditemukan dalam {file_path}.", file=sys.stderr)
-        return False
+    formatted_time = now_wib.strftime("%d %b %Y, %H:%M WIB")
 
-    new_html_content = re.sub(pattern, rf'\g<1>{text_saldo}\2', html_content)
+    # 1. Update slot spesifik (saldo-pagi, saldo-siang, saldo-sore, saldo-malam)
+    pattern_slot = rf'(<span\s+id="{target_id}"[^>]*>)[^<]*(</span>)'
+    if re.search(pattern_slot, html_content):
+        html_content = re.sub(pattern_slot, rf'\g<1>{text_saldo}\2', html_content)
+
+    # 2. Update saldo-terbaru (Hero Banner Utama)
+    pattern_terbaru = rf'(<span\s+id="saldo-terbaru"[^>]*>)[^<]*(</span>)'
+    if re.search(pattern_terbaru, html_content):
+        html_content = re.sub(pattern_terbaru, rf'\g<1>{text_saldo}\2', html_content)
+
+    # 3. Update waktu-update (Timestamp Scrape)
+    pattern_waktu = rf'(<span\s+id="waktu-update"[^>]*>)[^<]*(</span>)'
+    if re.search(pattern_waktu, html_content):
+        html_content = re.sub(pattern_waktu, rf'\g<1>{formatted_time}\2', html_content)
 
     with open(file_path, "w", encoding="utf-8") as f:
-        f.write(new_html_content)
+        f.write(html_content)
 
-    print(f"[SUCCESS] Berkas index.html berhasil diperbarui pada elemen #{target_id} dengan nilai '{text_saldo}'.")
+    print(f"[SUCCESS] Berkas index.html berhasil diperbarui untuk #{target_id}, #saldo-terbaru ('{text_saldo}'), dan #waktu-update ('{formatted_time}').")
     return True
 
 def scrape_and_update():
@@ -166,12 +172,12 @@ def scrape_and_update():
         print("[!] Mode Simulasi Dry-Run untuk pengujian struktur HTML lokal...")
         mock_saldo = "Rp 277.652.777,00"
         print(f"[*] Memperbarui index.html dengan nilai simulasi: {mock_saldo}")
-        update_html(target_id, mock_saldo)
+        update_html(target_id, mock_saldo, now_wib)
         return
 
     try:
         saldo_text = scrape_saldo_rajabiller(username, password)
-        update_html(target_id, saldo_text)
+        update_html(target_id, saldo_text, now_wib)
         print("\n[SUCCESS] Seluruh proses scraping dan pembaruan saldo selesai.")
     except Exception as err:
         print(f"\n[FATAL ERROR] Gagal memperbarui saldo: {err}", file=sys.stderr)
