@@ -94,17 +94,18 @@ def scrape_saldo_rajabiller(username: str, password: str) -> str:
 
             print("[*] Mencari elemen saldo (class 'font-semibold')...")
             # Ambil semua elemen dengan class 'font-semibold'
-            elements = page.query_selector_all(".font-semibold")
+            elements = page.query_selector_all(".font-semibold, span:has-text('Rp'), div:has-text('Rp')")
             
             extracted_saldo = None
             for el in elements:
                 text = el.text_content().strip()
-                # Bersihkan non-breaking space (&nbsp; / \xa0)
                 text_clean = text.replace('\xa0', ' ').replace('&nbsp;', ' ').strip()
                 
-                if "Rp" in text_clean:
-                    print(f"    -> Ditemukan calon saldo: '{text_clean}'")
-                    extracted_saldo = text_clean
+                # Gunakan regex match untuk menangkap format Rp X.XXX.XXX atau Rp X.XXX.XXX,XX
+                match = re.search(r'Rp\s*[\d\.,]+', text_clean)
+                if match:
+                    extracted_saldo = match.group(0)
+                    print(f"    -> Ditemukan saldo terformat: '{extracted_saldo}'")
                     break
 
             if not extracted_saldo:
