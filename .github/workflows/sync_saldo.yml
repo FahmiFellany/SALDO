@@ -1,0 +1,50 @@
+name: Auto Sync Saldo Rajabiller
+
+on:
+  schedule:
+    # Berjalan 4 kali sehari menyesuaikan Pagi, Siang, Sore, Malam WIB (Konversi ke UTC)
+    - cron: '0 1 * * *'  # Jam 08:00 WIB (Pagi)
+    - cron: '0 6 * * *'  # Jam 13:00 WIB (Siang)
+    - cron: '0 10 * * *' # Jam 17:00 WIB (Sore)
+    - cron: '0 14 * * *' # Jam 21:00 WIB (Malam)
+  workflow_dispatch: # Memungkinkan Anda menekan tombol "Run" secara manual kapan saja
+
+jobs:
+  update-saldo:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-node-version: '3.10'
+
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install playwright
+        playwright install chromium --with-deps
+
+    - name: Run Scraper Engine
+      env:
+        # Mengambil password asli Anda dari GitHub Secrets dengan aman
+        RAJABILLER_USER: ${{ secrets.RAJABILLER_USER }}
+        RAJABILLER_PASSWORD: ${{ secrets.RAJABILLER_PASSWORD }}
+      run: python update_saldo.py
+
+    - name: Commit and Push Changes
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "41898282+github-actions[bot]@://github.com"
+        git add index.html
+        
+        # Hanya commit jika ada perubahan angka saldo
+        if ! git diff --cached --exit-code; then
+          git commit -m "🤖 Auto-update data saldo berkala [WIB]"
+          git push
+        else
+          echo "Tidak ada perubahan saldo. Lewati proses commit."
+        fi
