@@ -3,7 +3,10 @@ import re
 import sys
 from datetime import datetime
 import zoneinfo
-from playwright.sync_api import sync_playwright
+try:
+    from playwright.sync_api import sync_playwright  # type: ignore
+except ImportError:
+    sync_playwright = None  # type: ignore
 
 RAJABILLER_URL = "https://wr.rajabiller.com"
 
@@ -34,6 +37,9 @@ def get_target_slot(jam_wib: int) -> tuple[str, str]:
             return "saldo-sore", "Sore (Fallback Jam 17 WIB)"
 
 def scrape_saldo_rajabiller(username: str, password: str) -> str:
+    if not sync_playwright:
+        raise ImportError("Modul 'playwright' belum terinstall di lingkungan ini. Silakan jalankan 'pip install playwright'.")
+
     print(f"[*] Membuka {RAJABILLER_URL} dengan Playwright Headless Browser...")
     with sync_playwright() as p:
         browser = p.chromium.launch(
